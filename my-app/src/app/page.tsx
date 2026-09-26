@@ -56,7 +56,10 @@ export default function Home() {
 
     return (
         <main className="flex min-h-screen flex-col justify-evenly items-center">
-            <h1 className="text-3xl">Hi, this side maiyu</h1>
+            <h1 className="text-3xl">Maiyu — AI Talker</h1>
+            <p className="text-xl text-center max-w-xl">
+                Talk naturally with Maiyu, an interactive AI talker.
+            </p>
 
             <button
                 onClick={handleClick}
