@@ -9,7 +9,9 @@ export default function Home() {
 
     const handleClick = async () => {
         try {
-            const response = await fetch("http://localhost:5000/api/msg");
+            const response = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL}/api/msg`,
+            );
 
             const data = await response.json();
 
