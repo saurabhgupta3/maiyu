@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import msgRouter from "./routes/msg.routes.js";
+import healthRouter from "./routes/health.routes.js";
 
 const app = express();
 
@@ -29,5 +30,6 @@ app.use(
 app.use(express.json());
 
 app.use("/api", msgRouter);
+app.use("/", healthRouter);
 
 export default app;
