@@ -13,6 +13,7 @@ const allowedOrigins = [
   "http://localhost:3000",
   "https://maiyu.online",
   "https://www.maiyu.online",
+  "http://localhost:8081",
 ];
 
 app.use(
