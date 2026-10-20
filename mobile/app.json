@@ -11,14 +11,12 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
-      "package": "online.maiyu.mobile",
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
-      "predictiveBackGestureEnabled": false
+        "package": "online.maiyu.mobile",
+        "adaptiveIcon": {
+            "backgroundColor": "#050A24",
+            "foregroundImage": "./assets/images/icon.png"
+        },
+        "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
@@ -27,13 +25,13 @@
     "plugins": [
       "expo-router",
       [
-        "expo-splash-screen",
-        {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
-        }
-      ]
+  "expo-splash-screen",
+  {
+    "backgroundColor": "#000000",
+    "image": "./assets/images/splash-icon.png",
+    "imageWidth": 220
+  }
+]
     ],
     "experiments": {
       "typedRoutes": true,

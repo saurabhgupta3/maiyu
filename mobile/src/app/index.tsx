@@ -1,5 +1,8 @@
-import { useState } from "react";
+
+import { useEffect, useRef, useState } from "react";
 import {
+  Animated,
+  Easing,
   View,
   Text,
   StyleSheet,
@@ -11,11 +14,60 @@ import * as Speech from "expo-speech";
 const PERSON_IMAGE = require("../../assets/images/person.png");
 const PERSON_BLINK_IMAGE = require("../../assets/images/person_blink.png");
 const PERSON_HI_IMAGE = require("../../assets/images/person_hi.png");
+const MAIYU_LOGO = require("../../assets/images/splash-icon.png");
 
 export default function HomeScreen() {
   const [message, setMessage] = useState("");
   const [active, setActive] = useState(false);
   const [image, setImage] = useState<"normal" | "blink" | "hi">("normal");
+
+  // Opening animation
+  const [showIntro, setShowIntro] = useState(true);
+
+  const introOpacity = useRef(new Animated.Value(0)).current;
+  const introScale = useRef(new Animated.Value(0.85)).current;
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const logoAnimation = Animated.parallel([
+      Animated.timing(introOpacity, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.spring(introScale, {
+        toValue: 1,
+        speed: 12,
+        bounciness: 3,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    const progressAnimation = Animated.timing(progress, {
+      toValue: 1,
+      duration: 1700,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+
+    logoAnimation.start();
+    progressAnimation.start();
+
+    const timer = setTimeout(() => {
+      setShowIntro(false);
+    }, 1900);
+
+    return () => {
+      clearTimeout(timer);
+      logoAnimation.stop();
+      progressAnimation.stop();
+    };
+  }, [introOpacity, introScale, progress]);
+
+  const progressWidth = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0%", "100%"],
+  });
 
   const handleClick = async () => {
     try {
@@ -23,10 +75,13 @@ export default function HomeScreen() {
         `${process.env.EXPO_PUBLIC_API_URL}/api/msg`,
       );
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error("API request failed");
+      }
 
+      const data = await response.json();
       setMessage(data.message);
-    } catch (error) {
+    } catch {
       setMessage("Something went wrong.");
     }
   };
@@ -61,6 +116,44 @@ export default function HomeScreen() {
     }, 220);
   };
 
+  // Branded opening screen
+  if (showIntro) {
+    return (
+      <View style={styles.introContainer}>
+        <Animated.Image
+          source={MAIYU_LOGO}
+          resizeMode="contain"
+          style={[
+            styles.introLogo,
+            {
+              opacity: introOpacity,
+              transform: [{ scale: introScale }],
+            },
+          ]}
+        />
+
+        <Text style={styles.startingText}>
+          Starting Maiyu
+          <Text style={styles.ellipsis}>...</Text>
+        </Text>
+
+        <View style={styles.progressTrack}>
+          <Animated.View
+            style={[
+              styles.progressFill,
+              { width: progressWidth },
+            ]}
+          />
+        </View>
+
+        <Text style={styles.loadingHint}>
+          Getting things ready
+        </Text>
+      </View>
+    );
+  }
+
+  // Existing Maiyu home screen
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Maiyu — AI Talker</Text>
@@ -127,10 +220,56 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  introContainer: {
+  flex: 1,
+  justifyContent: "center",
+  alignItems: "center",
+  backgroundColor: "#000000",
+  paddingHorizontal: 24,
+},
+
+  introLogo: {
+    width: 155,
+    height: 155,
+    marginBottom: 28,
+  },
+
+  startingText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#0369A1",
+    marginBottom: 18,
+    letterSpacing: 0.3,
+  },
+
+  ellipsis: {
+    color: "#0284C7",
+  },
+
+  progressTrack: {
+    width: 220,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "#DCEFFB",
+    overflow: "hidden",
+  },
+
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#0284C7",
+    borderRadius: 999,
+  },
+
+  loadingHint: {
+    marginTop: 12,
+    fontSize: 13,
+    color: "#64748B",
+  },
+
   container: {
     flex: 1,
     alignItems: "center",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 20,
     paddingTop: 50,
     paddingBottom: 40,
@@ -152,9 +291,9 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    backgroundColor: "#22c55e",
+    backgroundColor: "#22C55E",
     borderWidth: 1,
-    borderColor: "#22c55e",
+    borderColor: "#22C55E",
     borderRadius: 8,
     paddingHorizontal: 22,
     paddingVertical: 12,
@@ -170,7 +309,7 @@ const styles = StyleSheet.create({
   },
 
   buttonText: {
-    color: "#a855f7",
+    color: "#A855F7",
     fontSize: 17,
     fontWeight: "bold",
   },
