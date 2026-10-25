@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import msgRouter from "./routes/msg.routes.js";
 import healthRouter from "./routes/health.routes.js";
+import chatRoutes from "./routes/chat.routes.js";
 import {
   notFoundHandler,
   errorHandler,
@@ -34,8 +35,10 @@ app.use(
 
 app.use(express.json());
 
+app.use("/api/chat", chatRoutes);
 app.use("/api", msgRouter);
 app.use("/", healthRouter);
+
 
 app.use(notFoundHandler);
 app.use(errorHandler);
