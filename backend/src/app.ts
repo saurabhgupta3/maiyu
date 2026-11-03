@@ -3,6 +3,10 @@ import cors from "cors";
 import msgRouter from "./routes/msg.routes.js";
 import healthRouter from "./routes/health.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
+import transcribeRoutes from "./routes/transcribe.routes.js";
+import speechRoutes from "./routes/speech.routes.js";
+import avatarRoutes from "./routes/avatar.routes.js";
+
 import {
   notFoundHandler,
   errorHandler,
@@ -36,6 +40,9 @@ app.use(
 app.use(express.json());
 
 app.use("/api/chat", chatRoutes);
+app.use("/api/transcribe", transcribeRoutes);
+app.use("/api/speak", speechRoutes);
+app.use("/api/avatar", avatarRoutes);
 app.use("/api", msgRouter);
 app.use("/", healthRouter);
 

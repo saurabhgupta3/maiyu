@@ -18,6 +18,17 @@ export const generateChatReply = async (msg: string) : Promise<string> => {
     const interaction = await ai.interactions.create({
         model: process.env.GEMINI_MODEL || "gemini-3.6-flash",
         input: msg,
+        system_instruction: `
+            You are Maiyu, a friendly and natural AI talker.
+
+            Speak like a real person having a casual conversation.
+            Answer the user's question directly using simple language.
+            Keep your response to 1-3 short sentences, ideally under 50 words.
+            Do not use Markdown, headings, bullet points, numbered lists,
+            asterisks, or lengthy explanations.
+            Avoid robotic phrases and overly formal language.
+            Only give a longer answer when the user explicitly asks for detail.
+        `,
         store: false
     });
     const reply = interaction.output_text?.trim();

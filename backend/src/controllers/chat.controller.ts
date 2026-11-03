@@ -1,29 +1,37 @@
 import { Request, Response, NextFunction } from "express";
 import { generateChatReply } from "../services/chat.service.js";
 
-export const chatController = async (req : Request, res : Response, next: NextFunction) => {
+export const chatController = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+): Promise<void> => {
     try {
-        const {msg} = req.body;
-        if (typeof msg !== "string" || !msg.trim()) {
+        const { message } = req.body;
+
+        if (typeof message !== "string" || !message.trim()) {
             res.status(400).json({
                 success: false,
-                msg: "Please provide a valid message.",
+                message: "Please provide a valid message.",
             });
             return;
         }
-        if(msg.length > 2000) {
+
+        if (message.length > 2000) {
             res.status(400).json({
                 success: false,
-                msg: "message must not exceed 2000 characters"
+                message: "Message must not exceed 2000 characters.",
             });
             return;
         }
-        const reply = await generateChatReply(msg.trim());
+
+        const reply = await generateChatReply(message.trim());
+
         res.status(200).json({
             success: true,
-            msg: reply,
+            reply,
         });
-    } catch(err) {
-        next(err);
+    } catch (error) {
+        next(error);
     }
-}
+};
