@@ -6,6 +6,7 @@ import chatRoutes from "./routes/chat.routes.js";
 import transcribeRoutes from "./routes/transcribe.routes.js";
 import speechRoutes from "./routes/speech.routes.js";
 import avatarRoutes from "./routes/avatar.routes.js";
+import liveAvatarRoutes from "./routes/liveavatar.routes.js";
 
 import {
   notFoundHandler,
@@ -43,6 +44,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/transcribe", transcribeRoutes);
 app.use("/api/speak", speechRoutes);
 app.use("/api/avatar", avatarRoutes);
+app.use("/api/liveavatar", liveAvatarRoutes);
 app.use("/api", msgRouter);
 app.use("/", healthRouter);
 
