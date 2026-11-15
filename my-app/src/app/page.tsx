@@ -1,30 +1,271 @@
 "use client";
 
-import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+
+import AvatarStage from "../components/maiyu/AvatarStage";
+
+import VoiceControls from "../components/maiyu/VoiceControls";
+
+import ModeSelector from "../components/maiyu/ModeSelector";
+
+import LiveAvatarStage from "../components/maiyu/LiveAvatarStage";
+
+import { useStudioMode } from "../hooks/useStudioMode";
+
+import { useInstantMode } from "../hooks/useInstantMode";
+
+import { useLiveAvatar } from "../hooks/useLiveAvatar";
+
+import type { ConversationMode } from "../types/maiyu";
 
 export default function Home() {
     const [message, setMessage] = useState("");
+
     const [imgSrc, setImgSrc] = useState("/person.png");
+    const [isInstantBlinking, setIsInstantBlinking] = useState(false);
 
-    const [isRecording, setIsRecording] = useState(false);
-    const [isStartingRecording, setIsStartingRecording] = useState(false);
-    const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+    // Instant Mode is selected by default.
 
-    const [audioStatus, setAudioStatus] = useState("");
-    const [recordedAudioUrl, setRecordedAudioUrl] = useState("");
-    const [transcript, setTranscript] = useState("");
-    const [chatReply, setChatReply] = useState("");
-    const [avatarVideoUrl, setAvatarVideoUrl] = useState("");
+    const [selectedMode, setSelectedMode] =
+        useState<ConversationMode>("instant");
 
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-    const audioChunksRef = useRef<Blob[]>([]);
+    // --------------------------------
+    // STUDIO MODE
+    // --------------------------------
 
-    const audioUrlRef = useRef<string | null>(null);
-    const avatarVideoRef = useRef<HTMLVideoElement | null>(null);
+    const {
+        isRecording: studioIsRecording,
 
-    // Call the existing backend message endpoint.
+        isStartingRecording: studioIsStartingRecording,
+
+        isProcessingAudio: studioIsProcessingAudio,
+
+        audioStatus: studioAudioStatus,
+
+        recordedAudioUrl: studioRecordedAudioUrl,
+
+        transcript: studioTranscript,
+
+        chatReply: studioChatReply,
+
+        avatarVideoUrl,
+
+        avatarVideoRef,
+
+        handleStartRecording: startStudioRecording,
+
+        handleStopRecording: stopStudioRecording,
+
+        handleCancelVideo,
+    } = useStudioMode(() => {
+        setImgSrc("/person.png");
+    });
+
+    // --------------------------------
+    // INSTANT MODE
+    // --------------------------------
+
+    const {
+        isRecording: instantIsRecording,
+
+        isStartingRecording: instantIsStartingRecording,
+
+        isProcessingAudio: instantIsProcessingAudio,
+
+        audioStatus: instantAudioStatus,
+
+        recordedAudioUrl: instantRecordedAudioUrl,
+
+        transcript: instantTranscript,
+
+        chatReply: instantChatReply,
+
+        speechAudioUrl,
+
+        isSpeaking: instantIsSpeaking,
+
+        isMouthOpen: instantIsMouthOpen,
+
+        speechDuration: instantSpeechDuration,
+
+        handleStartRecording: startInstantRecording,
+
+        handleStopRecording: stopInstantRecording,
+
+        handleStopSpeech,
+
+        handleReplaySpeech,
+    } = useInstantMode();
+
+    // --------------------------------
+    // LIVE MODE
+    // --------------------------------
+
+    const {
+        videoRef: liveVideoRef,
+
+        sessionState: liveSessionState,
+
+        isStreamReady: liveIsStreamReady,
+
+        isLoading: liveIsLoading,
+
+        error: liveError,
+
+        handleStartSession: startLiveSession,
+
+        handleStopSession: stopLiveSession,
+    } = useLiveAvatar();
+
+    // --------------------------------
+    // INSTANT AVATAR BLINK ANIMATION
+    // --------------------------------
+
+    // Mouth movement comes from actual audio analysis.
+    // Blinking is estimated using sentence-ending punctuation.
+
+    useEffect(() => {
+        if (selectedMode !== "instant" || !instantIsSpeaking) {
+            setIsInstantBlinking(false);
+            return;
+        }
+
+        const blinkTimers: ReturnType<typeof setTimeout>[] = [];
+
+        let fallbackBlinkInterval:
+            | ReturnType<typeof setInterval>
+            | undefined;
+
+        const blinkAt = (delay: number) => {
+            const timer = setTimeout(() => {
+                setIsInstantBlinking(true);
+
+                const closeEyesTimer = setTimeout(() => {
+                    setIsInstantBlinking(false);
+                }, 160);
+
+                blinkTimers.push(closeEyesTimer);
+            }, Math.max(0, delay));
+
+            blinkTimers.push(timer);
+        };
+
+        const reply = instantChatReply.trim();
+
+        const sentenceEndings = reply
+            ? Array.from(reply.matchAll(/[.!?]+(?=\s|$)/g))
+            : [];
+
+        if (instantSpeechDuration > 0 && sentenceEndings.length > 0) {
+            sentenceEndings.forEach((match) => {
+                const characterPosition =
+                    (match.index ?? 0) + match[0].length;
+
+                const estimatedTime =
+                    (characterPosition / reply.length) *
+                    instantSpeechDuration;
+
+                if (
+                    estimatedTime > 0.35 &&
+                    estimatedTime < instantSpeechDuration - 0.15
+                ) {
+                    blinkAt(estimatedTime * 1000);
+                }
+            });
+        } else {
+            // If sentence timing cannot be estimated,
+            // blink periodically.
+
+            fallbackBlinkInterval = setInterval(() => {
+                setIsInstantBlinking(true);
+
+                setTimeout(() => {
+                    setIsInstantBlinking(false);
+                }, 160);
+            }, 5000);
+        }
+
+        return () => {
+            blinkTimers.forEach(clearTimeout);
+
+            if (fallbackBlinkInterval) {
+                clearInterval(fallbackBlinkInterval);
+            }
+
+            setIsInstantBlinking(false);
+        };
+    }, [
+        selectedMode,
+        instantIsSpeaking,
+        instantChatReply,
+        instantSpeechDuration,
+    ]);
+
+    // --------------------------------
+    // INSTANT AVATAR IMAGE SWITCHING
+    // --------------------------------
+
+    // Blink image takes priority over mouth animation.
+
+    useEffect(() => {
+        if (selectedMode !== "instant" || !instantIsSpeaking) {
+            setImgSrc("/person.png");
+            return;
+        }
+
+        if (isInstantBlinking) {
+            setImgSrc("/person_blink.png");
+        } else {
+            setImgSrc(
+                instantIsMouthOpen ? "/person_hi.png" : "/person.png"
+            );
+        }
+    }, [
+        selectedMode,
+        instantIsSpeaking,
+        instantIsMouthOpen,
+        isInstantBlinking,
+    ]);
+
+    // --------------------------------
+    // MODE SWITCHING
+    // --------------------------------
+
+    const isModeBusy =
+        studioIsRecording ||
+        studioIsStartingRecording ||
+        studioIsProcessingAudio ||
+        instantIsRecording ||
+        instantIsStartingRecording ||
+        instantIsProcessingAudio ||
+        liveIsLoading;
+
+    const handleModeChange = (mode: ConversationMode) => {
+        if (isModeBusy) {
+            return;
+        }
+
+        if (selectedMode === "studio" && avatarVideoUrl) {
+            handleCancelVideo();
+        }
+
+        if (selectedMode === "instant") {
+            handleStopSpeech();
+        }
+
+        if (selectedMode === "live" && liveIsStreamReady) {
+            void stopLiveSession();
+        }
+
+        setImgSrc("/person.png");
+
+        setSelectedMode(mode);
+    };
+
+    // --------------------------------
+    // EXISTING MESSAGE ENDPOINT
+    // --------------------------------
+
     const handleClick = async () => {
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -34,23 +275,29 @@ export default function Home() {
             }
 
             const response = await fetch(
-                `${apiUrl.replace(/\/+$/, "")}/api/msg`,
+                `${apiUrl.replace(/\/+$/, "")}/api/msg`
             );
 
             const data = await response.json().catch(() => null);
 
             if (!response.ok) {
-                throw new Error(data?.message || "API request failed.");
+                throw new Error(
+                    data?.message || "API request failed."
+                );
             }
 
             setMessage(data.message);
         } catch (error) {
             console.error("Error:", error);
+
             setMessage("Something went wrong.");
         }
     };
 
-    // Animate Maiyu and speak the fixed greeting "Hi" when Active is clicked.
+    // --------------------------------
+    // EXISTING ACTIVE BUTTON
+    // --------------------------------
+
     const handleActiveClick = () => {
         setImgSrc("/person_blink.png");
 
@@ -58,12 +305,13 @@ export default function Home() {
             setImgSrc("/person_hi.png");
 
             const speech = new SpeechSynthesisUtterance("Hi");
+
             const voices = window.speechSynthesis.getVoices();
 
             const maleVoice = voices.find(
                 (voice) =>
                     voice.lang.startsWith("en") &&
-                    /male|david|mark|daniel|alex/i.test(voice.name),
+                    /male|david|mark|daniel|alex/i.test(voice.name)
             );
 
             if (maleVoice) {
@@ -71,10 +319,13 @@ export default function Home() {
             }
 
             speech.rate = 0.85;
+
             speech.pitch = 0.9;
+
             speech.volume = 1;
 
             window.speechSynthesis.cancel();
+
             window.speechSynthesis.speak(speech);
 
             setTimeout(() => {
@@ -83,436 +334,9 @@ export default function Home() {
         }, 200);
     };
 
-    // Cancel the talking video and bring back Maiyu's original image.
-    const handleCancelVideo = () => {
-        if (avatarVideoRef.current) {
-            avatarVideoRef.current.pause();
-            avatarVideoRef.current.currentTime = 0;
-        }
-
-        setAvatarVideoUrl("");
-        setImgSrc("/person.png");
-        setAudioStatus("Video closed. Maiyu is back.");
-    };
-
-    // Start recording audio from the microphone.
-    const handleStartRecording = async () => {
-        if (isStartingRecording || isRecording || isProcessingAudio) {
-            return;
-        }
-
-        setIsStartingRecording(true);
-
-        try {
-            if (
-                !navigator.mediaDevices?.getUserMedia ||
-                typeof MediaRecorder === "undefined"
-            ) {
-                throw new Error(
-                    "Audio recording is not supported in this browser.",
-                );
-            }
-
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
-            });
-
-            streamRef.current = stream;
-            audioChunksRef.current = [];
-
-            // Clear the previous conversation result and recording.
-            setTranscript("");
-            setChatReply("");
-            setAvatarVideoUrl("");
-            setImgSrc("/person.png");
-            setMessage("");
-            setAudioStatus("Listening... Speak now.");
-
-            if (audioUrlRef.current) {
-                URL.revokeObjectURL(audioUrlRef.current);
-                audioUrlRef.current = null;
-                setRecordedAudioUrl("");
-            }
-
-            // Choose an audio format supported by the browser.
-            const supportedTypes = [
-                "audio/webm;codecs=opus",
-                "audio/mp4",
-                "audio/ogg;codecs=opus",
-            ];
-
-            const mimeType = supportedTypes.find((type) =>
-                MediaRecorder.isTypeSupported(type),
-            );
-
-            const options: MediaRecorderOptions = {};
-
-            if (mimeType) {
-                options.mimeType = mimeType;
-            }
-
-            const recorder = new MediaRecorder(stream, options);
-            mediaRecorderRef.current = recorder;
-
-            recorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    audioChunksRef.current.push(event.data);
-                }
-            };
-
-            // Called after the user clicks Stop Recording.
-            recorder.onstop = async () => {
-                setIsRecording(false);
-
-                const stopMicrophone = () => {
-                    stream.getTracks().forEach((track) => track.stop());
-
-                    if (streamRef.current === stream) {
-                        streamRef.current = null;
-                    }
-
-                    if (mediaRecorderRef.current === recorder) {
-                        mediaRecorderRef.current = null;
-                    }
-                };
-
-                const audioBlob = new Blob(audioChunksRef.current, {
-                    type: recorder.mimeType || "audio/webm",
-                });
-
-                if (audioBlob.size === 0) {
-                    setAudioStatus(
-                        "No audio was captured. Please try again.",
-                    );
-                    stopMicrophone();
-                    return;
-                }
-
-                // Keep a local playback option for the user's own recording.
-                const audioUrl = URL.createObjectURL(audioBlob);
-
-                if (audioUrlRef.current) {
-                    URL.revokeObjectURL(audioUrlRef.current);
-                }
-
-                audioUrlRef.current = audioUrl;
-                setRecordedAudioUrl(audioUrl);
-
-                setIsProcessingAudio(true);
-                setTranscript("");
-                setChatReply("");
-                setAvatarVideoUrl("");
-                setMessage("");
-
-                try {
-                    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-                    if (!apiUrl) {
-                        throw new Error(
-                            "NEXT_PUBLIC_API_URL is not configured.",
-                        );
-                    }
-
-                    const baseUrl = apiUrl.replace(/\/+$/, "");
-
-                    // STEP 1: Send the recorded audio to Gemini transcription.
-                    setAudioStatus("Converting your voice into text...");
-
-                    const audioType = audioBlob.type.toLowerCase();
-
-                    const extension = audioType.includes("mp4")
-                        ? "m4a"
-                        : audioType.includes("ogg")
-                          ? "ogg"
-                          : "webm";
-
-                    const formData = new FormData();
-
-                    formData.append(
-                        "audio",
-                        audioBlob,
-                        `recording.${extension}`,
-                    );
-
-                    const transcriptionResponse = await fetch(
-                        `${baseUrl}/api/transcribe`,
-                        {
-                            method: "POST",
-                            body: formData,
-                        },
-                    );
-
-                    const transcriptionData = await transcriptionResponse
-                        .json()
-                        .catch(() => null);
-
-                    if (!transcriptionResponse.ok) {
-                        throw new Error(
-                            transcriptionData?.message ||
-                                "Speech transcription failed.",
-                        );
-                    }
-
-                    const spokenText = transcriptionData?.transcript;
-
-                    if (
-                        typeof spokenText !== "string" ||
-                        !spokenText.trim()
-                    ) {
-                        throw new Error(
-                            "No speech was recognized. Please try again.",
-                        );
-                    }
-
-                    setTranscript(spokenText);
-
-                    // STEP 2: Send recognized text to the Gemini chat endpoint.
-                    setAudioStatus("Maiyu is thinking...");
-
-                    const chatResponse = await fetch(
-                        `${baseUrl}/api/chat`,
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({
-                                message: spokenText,
-                            }),
-                        },
-                    );
-
-                    const chatData = await chatResponse
-                        .json()
-                        .catch(() => null);
-
-                    if (!chatResponse.ok) {
-                        throw new Error(
-                            chatData?.message ||
-                                "Could not get a response from Maiyu.",
-                        );
-                    }
-
-                    const reply =
-                        typeof chatData?.reply === "string"
-                            ? chatData.reply
-                            : chatData?.msg;
-
-                    if (typeof reply !== "string" || !reply.trim()) {
-                        throw new Error(
-                            "Maiyu returned an empty response.",
-                        );
-                    }
-
-                    setChatReply(reply);
-
-                    // STEP 3: Generate Gemini speech and submit it to Sync Labs.
-                    setAudioStatus("Creating Maiyu's talking video...");
-
-                    const avatarResponse = await fetch(
-                        `${baseUrl}/api/avatar/generate`,
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({ text: reply }),
-                        },
-                    );
-
-                    const avatarData = await avatarResponse
-                        .json()
-                        .catch(() => null);
-
-                    if (!avatarResponse.ok) {
-                        throw new Error(
-                            avatarData?.message ||
-                                "Avatar video generation could not be started.",
-                        );
-                    }
-
-                    const generationId = avatarData?.generationId;
-
-                    if (
-                        typeof generationId !== "string" ||
-                        !generationId.trim()
-                    ) {
-                        throw new Error(
-                            "Sync Labs did not return a generation ID.",
-                        );
-                    }
-
-                    // STEP 4: Poll until Sync Labs finishes generating the video.
-                    let videoReady = false;
-
-                    for (let attempt = 0; attempt < 60; attempt++) {
-                        const statusResponse = await fetch(
-                            `${baseUrl}/api/avatar/status/${encodeURIComponent(generationId)}`,
-                        );
-
-                        const statusData = await statusResponse
-                            .json()
-                            .catch(() => null);
-
-                        if (!statusResponse.ok) {
-                            throw new Error(
-                                statusData?.message ||
-                                    "Could not check the avatar video status.",
-                            );
-                        }
-
-                        const status = String(
-                            statusData?.status || "",
-                        ).toUpperCase();
-
-                        if (status === "COMPLETED") {
-                            const videoUrl = statusData?.videoUrl;
-
-                            if (
-                                typeof videoUrl !== "string" ||
-                                !videoUrl.trim()
-                            ) {
-                                throw new Error(
-                                    "Video generation completed, but no video URL was returned.",
-                                );
-                            }
-
-                            setAvatarVideoUrl(videoUrl);
-                            setAudioStatus("Maiyu's video is ready.");
-
-                            videoReady = true;
-                            break;
-                        }
-
-                        if (status === "FAILED" || status === "REJECTED") {
-                            throw new Error(
-                                statusData?.error ||
-                                    "Sync Labs could not generate the video.",
-                            );
-                        }
-
-                        setAudioStatus(
-                            `Creating Maiyu's talking video... (${status || "PROCESSING"})`,
-                        );
-
-                        // Check status every 10 seconds.
-                        // 60 attempts gives the generation about 10 minutes.
-                        if (attempt < 59) {
-                            await new Promise((resolve) =>
-                                setTimeout(resolve, 10000),
-                            );
-                        }
-                    }
-
-                    if (!videoReady) {
-                        throw new Error(
-                            `Video generation is still processing after about 10 minutes. Generation ID: ${generationId}. Check its status using GET /api/avatar/status/${generationId}.`,
-                        );
-                    }
-                } catch (error) {
-                    console.error("Voice conversation error:", error);
-
-                    setAudioStatus(
-                        error instanceof Error
-                            ? error.message
-                            : "Something went wrong. Please try again.",
-                    );
-                } finally {
-                    stopMicrophone();
-                    setIsProcessingAudio(false);
-                }
-            };
-
-            recorder.onerror = () => {
-                setAudioStatus("Recording failed. Please try again.");
-                setIsRecording(false);
-
-                stream.getTracks().forEach((track) => track.stop());
-
-                if (streamRef.current === stream) {
-                    streamRef.current = null;
-                }
-
-                if (mediaRecorderRef.current === recorder) {
-                    mediaRecorderRef.current = null;
-                }
-            };
-
-            recorder.start();
-
-            setIsRecording(true);
-            setAudioStatus("Listening... Speak now.");
-        } catch (error) {
-            console.error("Microphone error:", error);
-
-            streamRef.current?.getTracks().forEach((track) => track.stop());
-
-            streamRef.current = null;
-            mediaRecorderRef.current = null;
-
-            setIsRecording(false);
-
-            setAudioStatus(
-                error instanceof Error
-                    ? error.message
-                    : "Microphone access denied or unavailable.",
-            );
-        } finally {
-            setIsStartingRecording(false);
-        }
-    };
-
-    // Stop recording.
-    const handleStopRecording = () => {
-        const recorder = mediaRecorderRef.current;
-
-        if (recorder && recorder.state !== "inactive") {
-            recorder.stop();
-            setAudioStatus("Preparing your recording...");
-        }
-    };
-
-    // Automatically play the completed talking-avatar video.
-    useEffect(() => {
-        if (!avatarVideoUrl || !avatarVideoRef.current) {
-            return;
-        }
-
-        const video = avatarVideoRef.current;
-        video.currentTime = 0;
-
-        video.play()
-            .then(() => {
-                setAudioStatus("Maiyu is speaking...");
-            })
-            .catch((error) => {
-                console.warn("Video autoplay was blocked:", error);
-
-                setAudioStatus(
-                    "Maiyu's video is ready. Press Play to watch.",
-                );
-            });
-    }, [avatarVideoUrl]);
-
-    // Release microphone and local recording resources when leaving the page.
-    useEffect(() => {
-        return () => {
-            const recorder = mediaRecorderRef.current;
-
-            if (recorder && recorder.state !== "inactive") {
-                recorder.onstop = null;
-                recorder.stop();
-            }
-
-            streamRef.current?.getTracks().forEach((track) => track.stop());
-
-            if (audioUrlRef.current) {
-                URL.revokeObjectURL(audioUrlRef.current);
-            }
-
-            window.speechSynthesis?.cancel();
-        };
-    }, []);
+    // --------------------------------
+    // HOMEPAGE
+    // --------------------------------
 
     return (
         <main className="flex min-h-screen flex-col items-center justify-evenly gap-5 px-4 py-8">
@@ -524,6 +348,12 @@ export default function Home() {
                 Talk naturally with Maiyu, an interactive AI talker.
             </p>
 
+            <ModeSelector
+                selectedMode={selectedMode}
+                onModeChange={handleModeChange}
+                disabled={isModeBusy}
+            />
+
             <button
                 onClick={handleClick}
                 className="rounded-md border border-green-500 bg-green-500 px-4 py-2 font-bold text-purple-500"
@@ -531,53 +361,31 @@ export default function Home() {
                 How to use
             </button>
 
-            {/* Maiyu's image and generated video share this same area. */}
-            <div className="flex flex-col items-center gap-3">
-                <div className="relative h-[400px] w-[400px] max-w-full overflow-hidden">
-                    {avatarVideoUrl ? (
-                        <video
-                            ref={avatarVideoRef}
-                            src={avatarVideoUrl}
-                            controls
-                            autoPlay
-                            playsInline
-                            className="h-full w-full object-contain"
-                            onPlay={() =>
-                                setAudioStatus("Maiyu is speaking...")
-                            }
-                            onEnded={() =>
-                                setAudioStatus(
-                                    "Maiyu finished speaking. Press Cancel video to return to the image.",
-                                )
-                            }
-                            onError={() =>
-                                setAudioStatus(
-                                    "The video could not be played. Please try again.",
-                                )
-                            }
-                        />
-                    ) : (
-                        <Image
-                            src={imgSrc}
-                            alt="Maiyu character"
-                            height={400}
-                            width={400}
-                            priority
-                            className="h-full w-full object-contain"
-                        />
-                    )}
-                </div>
+            {/* Shared avatar display */}
 
-                {/* Show the cancel button only when the generated video is visible. */}
-                {avatarVideoUrl && (
-                    <button
-                        onClick={handleCancelVideo}
-                        className="rounded-md bg-red-600 px-5 py-2 font-semibold text-white transition hover:bg-red-700"
-                    >
-                        Cancel video
-                    </button>
-                )}
-            </div>
+            {selectedMode !== "live" && (
+                <AvatarStage
+                    imgSrc={imgSrc}
+                    avatarVideoUrl={
+                        selectedMode === "studio"
+                            ? avatarVideoUrl
+                            : ""
+                    }
+                    avatarVideoRef={avatarVideoRef}
+                    onCancelVideo={handleCancelVideo}
+                    onVideoPlay={() =>
+                        console.log("Maiyu is speaking...")
+                    }
+                    onVideoEnded={() =>
+                        console.log("Maiyu finished speaking.")
+                    }
+                    onVideoError={() =>
+                        console.error(
+                            "The generated video could not be played."
+                        )
+                    }
+                />
+            )}
 
             <button
                 onClick={handleActiveClick}
@@ -587,76 +395,60 @@ export default function Home() {
             </button>
 
             {message && (
-                <p className="text-center text-xl">{message}</p>
+                <p className="text-center text-xl">
+                    {message}
+                </p>
             )}
 
-            <section className="flex w-full max-w-md flex-col items-center gap-4 rounded-xl border border-gray-200 p-5">
-                <h2 className="text-xl font-semibold">
-                    Talk to Maiyu
-                </h2>
+            {/* INSTANT MODE */}
 
-                <button
-                    onClick={
-                        isRecording
-                            ? handleStopRecording
-                            : handleStartRecording
-                    }
-                    disabled={isStartingRecording || isProcessingAudio}
-                    className={`rounded-md px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
-                        isRecording
-                            ? "bg-red-600 hover:bg-red-700"
-                            : "bg-blue-600 hover:bg-blue-700"
-                    }`}
-                >
-                    {isStartingRecording
-                        ? "Opening microphone..."
-                        : isProcessingAudio
-                          ? "Processing..."
-                          : isRecording
-                            ? "Stop Recording"
-                            : "Listen"}
-                </button>
+            {selectedMode === "instant" && (
+                <VoiceControls
+                    isRecording={instantIsRecording}
+                    isStartingRecording={instantIsStartingRecording}
+                    isProcessingAudio={instantIsProcessingAudio}
+                    audioStatus={instantAudioStatus}
+                    recordedAudioUrl={instantRecordedAudioUrl}
+                    transcript={instantTranscript}
+                    chatReply={instantChatReply}
+                    responseAudioUrl={speechAudioUrl}
+                    isSpeaking={instantIsSpeaking}
+                    onStartRecording={startInstantRecording}
+                    onStopRecording={stopInstantRecording}
+                    onReplayResponseAudio={handleReplaySpeech}
+                />
+            )}
 
-                {audioStatus && (
-                    <p className="text-center text-sm text-gray-600">
-                        {audioStatus}
-                    </p>
-                )}
+            {/* LIVE MODE */}
 
-                {recordedAudioUrl && (
-                    <div className="flex w-full flex-col items-center gap-2">
-                        <p className="text-sm font-medium">
-                            Play your recording
-                        </p>
+            {selectedMode === "live" && (
+                <LiveAvatarStage
+                    videoRef={liveVideoRef}
+                    sessionState={liveSessionState}
+                    isStreamReady={liveIsStreamReady}
+                    isLoading={liveIsLoading}
+                    error={liveError}
+                    onStartSession={startLiveSession}
+                    onStopSession={stopLiveSession}
+                />
+            )}
 
-                        <audio
-                            controls
-                            src={recordedAudioUrl}
-                            className="w-full"
-                        />
-                    </div>
-                )}
+            {/* STUDIO MODE */}
 
-                {transcript && (
-                    <div className="w-full space-y-2">
-                        <p className="font-semibold">You said:</p>
-
-                        <p className="rounded-lg bg-gray-100 p-3 text-gray-900">
-                            {transcript}
-                        </p>
-                    </div>
-                )}
-
-                {chatReply && (
-                    <div className="w-full space-y-2">
-                        <p className="font-semibold">Maiyu replied:</p>
-
-                        <p className="rounded-lg bg-blue-50 p-3 text-gray-900">
-                            {chatReply}
-                        </p>
-                    </div>
-                )}
-            </section>
+            {selectedMode === "studio" && (
+                <VoiceControls
+                    isRecording={studioIsRecording}
+                    isStartingRecording={studioIsStartingRecording}
+                    isProcessingAudio={studioIsProcessingAudio}
+                    audioStatus={studioAudioStatus}
+                    recordedAudioUrl={studioRecordedAudioUrl}
+                    transcript={studioTranscript}
+                    chatReply={studioChatReply}
+                    onStartRecording={startStudioRecording}
+                    onStopRecording={stopStudioRecording}
+                    onReplayResponseAudio={() => {}}
+                />
+            )}
         </main>
     );
 }

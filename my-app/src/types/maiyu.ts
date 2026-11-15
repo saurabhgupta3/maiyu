@@ -1,0 +1,1 @@
+export type ConversationMode = "instant" | "live" | "studio";
